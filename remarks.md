@@ -1,0 +1,4 @@
+- tests not runnable if the server is already running : need to change port
+- response API flat, warning, should be encapsulated in an object, not returngin array directly
+- tests not independant
+- needs pagination

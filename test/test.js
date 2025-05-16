@@ -1,6 +1,8 @@
 const request = require('supertest');
 const assert = require('assert');
-const app = require('../index');
+const buildApp = require('../app');
+
+const app = buildApp();
 
 const baseGameData = {
   publisherId: '1234567890',
@@ -22,15 +24,15 @@ const seedGame = (data = {
   .set('Accept', 'application/json')
   .then((result) => result.body.id);
 
-const expectResultToMatchGame = (resultGame, { name, platform }) => {
+const expectResultToMatchGame = (resultGame, { name, platform, ...overrides }) => {
   assert.notStrictEqual(resultGame, undefined, 'resultGame should not be undefined');
   assert.strictEqual(resultGame.name, name);
   assert.strictEqual(resultGame.platform, platform);
-  assert.strictEqual(resultGame.publisherId, baseGameData.publisherId);
-  assert.strictEqual(resultGame.storeId, baseGameData.storeId);
-  assert.strictEqual(resultGame.bundleId, baseGameData.bundleId);
-  assert.strictEqual(resultGame.appVersion, baseGameData.appVersion);
-  assert.strictEqual(resultGame.isPublished, baseGameData.isPublished);
+  assert.strictEqual(resultGame.publisherId, overrides.publisherId ?? baseGameData.publisherId);
+  assert.strictEqual(resultGame.storeId, overrides.storeId ?? baseGameData.storeId);
+  assert.strictEqual(resultGame.bundleId, overrides.bundleId ?? baseGameData.bundleId);
+  assert.strictEqual(resultGame.appVersion, overrides.appVersion ?? baseGameData.appVersion);
+  assert.strictEqual(resultGame.isPublished, overrides.isPublished ?? baseGameData.isPublished);
 };
 
 /**
@@ -299,6 +301,109 @@ describe('POST /api/search', () => {
       name: 'IOS App Search',
       platform: 'ios',
     });
+    assert.strictEqual(result.body.length, 1);
+  });
+});
+
+describe('POST /api/games/populate', () => {
+  const gameIds = [];
+  let appWithStubbedTopGames;
+
+  afterEach(async () => {
+    await Promise.all(gameIds.map(async (gameId) => {
+      await request(app)
+        .delete(`/api/games/${gameId}`)
+        .set('Accept', 'application/json')
+        .expect(200);
+    }));
+  });
+
+  it('respond with 201 and populate the database with top android and ios games', async () => {
+    const androidGame1 = {
+      name: 'Android Game 1',
+      platform: 'android',
+      storeId: '1234',
+      bundleId: 'ag1.bundle.id',
+      publisherId: '1234567890',
+      appVersion: '1.0.0',
+      isPublished: true,
+    };
+    const androidGame2 = {
+      name: 'Android Game 2',
+      platform: 'android',
+      storeId: '4567',
+      bundleId: 'ag2.bundle.id',
+      appVersion: '1.1.0',
+      publisherId: '234567890',
+      isPublished: true,
+    };
+    const iosGame1 = {
+      name: 'IOS Game 1',
+      platform: 'ios',
+      storeId: '2345',
+      bundleId: 'ig1.bundle.id',
+      appVersion: '2.0.0',
+      publisherId: '34567890',
+      isPublished: true,
+    };
+    const iosGame2 = {
+      name: 'IOS Game 2',
+      platform: 'ios',
+      storeId: '3456',
+      bundleId: 'ig2.bundle.id',
+      appVersion: '2.1.0',
+      publisherId: '4567890',
+      isPublished: true,
+    };
+    const topGames = [androidGame1, androidGame2, iosGame1, iosGame2]
+    appWithStubbedTopGames = buildApp({
+      getTopGames: () => Promise.resolve(topGames),
+      port: 3001,
+    });
+
+    const populateResult = await request(appWithStubbedTopGames)
+      .post('/api/games/populate')
+      .expect(201);
+    gameIds.push(...populateResult.body);
+
+    const result = await request(appWithStubbedTopGames)
+      .get('/api/games')
+      .set('Accept', 'application/json')
+      .expect('Content-Type', /json/)
+      .expect(200);
+    assert.strictEqual(result.body.length, 4);
+    result.body.forEach((resultGame, index) => {
+     expectResultToMatchGame(resultGame, topGames[index]);
+    });
+  });
+
+  it('does not duplicate games', async () => {
+    const androidGame1 = {
+      name: 'Android Game 1',
+      platform: 'android',
+      storeId: '1234',
+      bundleId: 'ag1.bundle.id',
+      publisherId: '1234567890',
+      appVersion: '1.0.0',
+      isPublished: true,
+    };
+    await seedGame(androidGame1);
+    const topGames = [androidGame1]
+    appWithStubbedTopGames = buildApp({
+      getTopGames: () => Promise.resolve(topGames),
+      port: 3002,
+    });
+
+    const populateResult = await request(appWithStubbedTopGames)
+      .post('/api/games/populate')
+      .expect(201);
+    gameIds.push(...populateResult.body);
+
+    const result = await request(appWithStubbedTopGames)
+      .get('/api/games')
+      .set('Accept', 'application/json')
+      .expect('Content-Type', /json/)
+      .expect(200);
     assert.strictEqual(result.body.length, 1);
   });
 });

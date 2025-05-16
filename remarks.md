@@ -1,4 +1,6 @@
 - tests not runnable if the server is already running : need to change port
-- response API flat, warning, should be encapsulated in an object, not returngin array directly
+- response API flat, warning, should be encapsulated in an object, not returning an array directly
 - tests not independant
 - needs pagination
+- Badly encoded S3 JSON
+- I assume we are only interested in the first entry for each top-level entry in json.

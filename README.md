@@ -63,8 +63,28 @@ Many other applications at Voodoo will use consume this API.
 We are planning to put this project in production. According to you, what are the missing pieces to make this project production ready? 
 Please elaborate an action plan.
 
+- Create a continuous delivery pipeline with at least a commit stage where all fast tests run, alongside linting for example.
+- Fix the tests, right now they are dependant on each other, a proper beforeEach / afterEach strategy would be beneficial.
+- Since the DB is sqlite, the end-to-end tests are very fast, but they will not be as fast when changing DB for a "real" database other that a flat file.
+- Hence the need to decide on a proper test strategy to alleviate this issue.
+- Deploy the app where you see fit. Might be a simple VPC or a cloud function or anything else really.
+- Decide on a database strategy other than the very limiting sqlite.
+- There should be some logging and error tracking tools to enable production monitoring and observability (tools like Sentry, Rollbar, etc.)
+- The API should be protected through authentication and authorization
+- Express is no longer maintained, a migration towards Fastify should be planned to avoid potential memory leaks and vulnerability
+- The code is quite procedural right now. It might not be an issue if the project is not intended to grow, but if it has  to evolve, the code should be refactored into a more modular way to enchance testability and maintainability.
+- A word of caution : the API returns arrays, it prevents us to make change to the API response in a backward compatible manner. API repsonse should always be object to be able to add properties if needed without breaking the existing clients.
+- The API should be paginated
+- The populate endpoint has no size limit right now, checks should be added here to avoid memory overflow, and if this endpoint should be able to handle large files, a streaming approach would be preferable.
+
+
 #### Question 2:
 Let's pretend our data team is now delivering new files every day into the S3 bucket, and our service needs to ingest those files
 every day through the populate API. Could you describe a suitable solution to automate this? Feel free to propose architectural changes.
+
+- I wouldn't use the API direclty to do that. We can respond to some S3 events when the files is updated, in a worker that calls the same logic that the one actually written directly in the route (thus extracting this logic inside its own logic in a service for example).
+- Depending on the fault tolerance, I wouldn't go to crazy with this, a simple retry policy in case of failure could do the job, while bulk-creating the games inside a transaction. It depedns on the requirements.
+- An even simpler solution would be to just pull the data once a day if it fits the functional requirements.
+- If the data has to be ingested realtime, responding to an S3 event when file is updated would be simpler. A simple solution could be to simply create an aws lambda that pushes a message into a cloud pubsub topic (since you're on GCP), and this topic could be consumed by the worker ingesting data.
 
 
